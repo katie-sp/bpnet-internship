@@ -15,7 +15,7 @@ import modisco
 def make_shap_scores(
     model_path, model_type, dataloader, input_length, num_tasks, out_path,
     reference_fasta, chrom_sizes, task_index=None, profile_length=1000,
-    controls=None, num_strands=2, batch_size=128
+    controls=None, num_strands=2, batch_size=128, output_head='profile'
 ):
     """
     Computes SHAP scores over an entire dataset, and saves them as an HDF5 file.
@@ -24,7 +24,7 @@ def make_shap_scores(
     Arguments:
         `model_path`: path to saved model
         `model_type`: either "binary" or "profile"
-        `dataloader`: DataLoader of data, which SHAP scores will be computer on
+        `dataloader`: DataLoader of data, which SHAP scores will be computed on
         `input_length`: length of input sequences
         `num_tasks`: number of tasks in the model
         `out_path`: path to HDF5 to save SHAP scores and input sequences
@@ -36,6 +36,7 @@ def make_shap_scores(
         `controls`: for profile models, the kind of controls used: "matched",
             "shared", or None; this also determines the class of the model
         `batch_size`: batch size for SHAP score computation
+        `output_head`: either "profile" or "count" (which part of the model to explain)
     Creates/saves an HDF5 containing the SHAP scores and the input sequences.
     The HDF5 has the following keys:
         `coords_chrom`: an N-array of the coordinate chromosomes
@@ -86,9 +87,10 @@ def make_shap_scores(
     hyp_scores = np.empty((num_pos, input_length, 4))
     
     # Create the explainer
+    # EDITED JAN 8 2022 TO ADD OUTPUT HEAD
     explainer = compute_shap.create_model_explainer(
         model, 'profile', input_length, profile_length, num_tasks, num_strands,
-        controls, task_index=task_index
+        controls, task_index=task_index, output_head=output_head
     )
     i = 0
     j = 0
