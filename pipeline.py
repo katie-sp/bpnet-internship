@@ -21,7 +21,7 @@ import glob
 import pickle
 
 import profile_models
-from profile_models import place_tensor
+from profile_models import place_tensor, ModelLoader
 import profile_performance
 
 import all_functions 
@@ -53,8 +53,8 @@ if not hasattr(tqdm,'notebook'):
     tqdm.notebook = tqdm.std
 
 if __name__ == "__main__":
-    sys.stdout = open('/home/katie/bp_repo/pipeline_outputs/stdout.txt', 'a')
-    sys.stderr = open('/home/katie/bp_repo/pipeline_outputs/stderr.txt', 'a')
+    #sys.stdout = open('/home/katie/bp_repo/pipeline_outputs/stdout.txt', 'a')
+    #sys.stderr = open('/home/katie/bp_repo/pipeline_outputs/stderr.txt', 'a')
     
     import argparse
     # SET VARIABLES
@@ -107,7 +107,7 @@ if __name__ == "__main__":
     pickle.dump(losses, open(outdir + 'losses.pkl', 'wb'))
 
     # SAVE PREDICTIONS
-    model = ModelLoader(controls, num_tasks, outdir + 'model.state_dict').load_model()
+    model = ModelLoader(outdir + 'model.state_dict', controls, num_tasks).load_model()
     full_dataloader = DataLoader(tasks, assay, controls, tasks_path, ['full'], jitter=False).make_loaders()['full']
     save_preds(full_dataloader, model, outdir + 'preds')
 
