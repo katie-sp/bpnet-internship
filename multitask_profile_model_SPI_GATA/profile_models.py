@@ -633,3 +633,5 @@ class ModelLoader():
 
         model.load_state_dict(torch.load(self.model_path))
         model.eval()
+        model.to('cuda')
+        return model

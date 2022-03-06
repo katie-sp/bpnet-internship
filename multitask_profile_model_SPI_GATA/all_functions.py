@@ -18,6 +18,7 @@ import matplotlib.pyplot as plt
 import pyfaidx
 import pyBigWig
 import tqdm
+import h5py
 
 import profile_models
 from profile_models import place_tensor
@@ -155,7 +156,7 @@ class BPDatasetWithoutControls(torch.utils.data.Dataset):
             jitter_amount = np.random.randint(-self.jitter, self.jitter, size=len(coords_batch))
             coords_batch[:, 1] = coords_batch[:, 1] + jitter_amount
             coords_batch[:, 2] = coords_batch[:, 2] + jitter_amount
-            
+        
         input_seqs = self._get_input_seqs(coords_batch)
         true_profs = self._get_profiles(coords_batch, getattr(self,'tasks'))
         
@@ -189,8 +190,8 @@ class BPDatasetWithControls(BPDatasetWithoutControls):
         
         tf_neg_reader = pyBigWig.open(glob.glob(tasks_path + task + '/' + task + '*neg.bw')[0], "r")
         tf_pos_reader = pyBigWig.open(glob.glob(tasks_path + task + '/' + task + '*pos.bw')[0], "r")
-        cont_neg_reader = pyBigWig.open(glob.glob(tasks_path + task + '/' + task + 'control*neg.bw')[0], "r")
-        cont_pos_reader = pyBigWig.open(glob.glob(tasks_path + task + '/' + task + 'control*pos.bw')[0], "r")
+        cont_neg_reader = pyBigWig.open(glob.glob(tasks_path + task + '/control*neg.bw')[0], "r")
+        cont_pos_reader = pyBigWig.open(glob.glob(tasks_path + task + '/control*pos.bw')[0], "r")
         
         for i, (chrom, start, end) in enumerate(coords_batch):
             true_profs[i, :, 0] = np.nan_to_num(tf_neg_reader.values(chrom, start, end))
@@ -256,6 +257,7 @@ def load_task_peak_table(bed_path, task):
     peak_table["start"] = peak_table["peak_start"] + peak_table["summit_offset"]
     peak_table["end"] = peak_table["start"] + 1
     peak_table["task"] = task
+    peak_table = peak_table.loc[peak_table.chrom != 'chrM']
     return peak_table
 
 def load_peak_tables(tasks):
@@ -408,7 +410,7 @@ test_chroms = ["chr1"]
 
 counts_loss_weight = 20
 learning_rate = 0.001
-num_epochs = 1 # original 5
+num_epochs = 10 # original 5
     
 base_kwargs = {'reference_fasta_path':reference_fasta_path, 
                'tasks_path':tasks_path, 'dna_to_one_hot': dna_to_one_hot}
@@ -471,7 +473,6 @@ def evaluate(train_tasks, val_tasks, test_tasks, num_tasks, assay, controls=True
 
     # Create Datasets and construct DataLoaders with multiple workers
     num_workers = 15
-    print(train_kwargs)
 
     BPDataset = BPDatasetWithControls if controls else BPDatasetWithoutControls
     train_dset = BPDataset(train_coords,**train_kwargs)
@@ -523,19 +524,19 @@ def evaluate(train_tasks, val_tasks, test_tasks, num_tasks, assay, controls=True
 
 
 # added March 5, 2022
-full_dataloader = DataLoader(tasks, assay, controls, tasks_path, ['full'], jitter=False).make_loaders()['full']
 class DataLoader():
     ''' Load up data! '''
     def __init__(self, tasks, assay, controls, tasks_path, subset, jitter=False):
         ''' subset should be a list of some combination of "train", "test", "val", "full" ''' 
-        self.tasks = tasks.sort()    # alphabetize everything, to be safe
+        self.tasks = tasks
+        self.tasks.sort()    # alphabetize everything, to be safe
         self.assay = assay
         self.controls = controls
         self.tasks_path = tasks_path
         self.subset = subset
         self.jitter = jitter
         
-    def make_loader():
+    def make_loaders(self):
         ''' Create dataloaders ''' 
 
         kwargs = base_kwargs.copy()
@@ -545,7 +546,7 @@ class DataLoader():
 
 
         # equivalent to all_coords in the original code
-        all_coords = test_peak_table[["chrom", "start", "end", "task"]].values  # need task to create statuses
+        all_coords = peak_table[["chrom", "start", "end", "task"]].values  # need task to create statuses
 
         train_coords = all_coords [np.isin(all_coords[:, 0], train_chroms)]
         val_coords = all_coords [np.isin(all_coords[:, 0], val_chroms)]   
@@ -562,16 +563,15 @@ class DataLoader():
             statuses += list( test_coords[len(test_coords)%128 + i:,3] ) * 2
 
         statuses = np.array(statuses)
-        model_task_statuses = test_tasks
+        model_task_statuses = self.tasks
         test_coords = test_coords[:,:-1]  # get rid of task column now
 
         # Create Datasets and construct DataLoaders with multiple workers
         num_workers = 15
-        print(train_kwargs)
 
         BPDataset = BPDatasetWithControls if self.controls else BPDatasetWithoutControls
-        train_dset = BPDataset(train_coords,**tkwargs)
-        val_dset = BPDataset(val_coords,*kwargs)
+        train_dset = BPDataset(train_coords,**kwargs)
+        val_dset = BPDataset(val_coords,**kwargs)
         test_dset = BPDataset(test_coords,**kwargs)
         full_dset = BPDataset(all_coords[:,:-1],**kwargs)   # need to remove "task" column from all_coords
 
@@ -582,8 +582,47 @@ class DataLoader():
         full_loader = torch.utils.data.DataLoader(full_dset,num_workers=15,collate_fn=collate_wrapper,pin_memory=True) 
         
         loaders = {'train': train_loader, 'val': val_loader, 'test': test_loader, 'full': full_loader}
-        return dict((i, loaders[i]) for i in subset)
+        return dict((i, loaders[i]) for i in self.subset)
     
 
-def save_preds(dataloader, model, outdir):
+def save_preds(dataloader, model, outdir, batch_size=128):
+    ''' Save predictions in hdf5 file '''
+    # Allocate arrays to hold the results
+    num_pos = 2 * len(dataloader.dataset.coords) ## for revcomp
+    coords_chrom = np.empty(num_pos, dtype=object)
+    coords_start = np.empty(num_pos, dtype=int)
+    coords_end = np.empty(num_pos, dtype=int)
     
+    i = 0
+    j = 0
+
+    for batch in dataloader:
+        batch_slice_half = slice(i * batch_size, (i + 1) * batch_size)
+        batch_slice_full = slice(j * batch_size, (j + 2) * batch_size) 
+        # Compute scores
+        coords = dataloader.dataset.coords[batch_slice_half]
+
+        # Fill in data - FIXED SEP 25 FOR COORDS_END - COORDS_START to equal 2114, not 1
+        coords_chrom[batch_slice_full] = np.concatenate((coords[:, 0], coords[:, 0]))
+        
+        mid = (coords[:, 1] + coords[:, 2]) // 2   # where 2114 is input length
+        coords[:, 1] = mid - (2114 // 2)
+        coords[:, 2] = coords[:, 1] + 2114
+        
+        coords_start[batch_slice_full] = np.concatenate((coords[:, 1], coords[:, 1]))
+        coords_end[batch_slice_full] = np.concatenate((coords[:, 2], coords[:, 2]))
+        i += 1
+        j += 2
+    true_profs, log_pred_profs, true_counts, log_pred_counts = get_predictions(dataloader, model)
+
+    # Write to HDF5
+    print("Saving result to HDF5...")
+    os.makedirs(os.path.dirname(outdir), exist_ok=True)
+    with h5py.File(outdir, "w") as f:
+        f.create_dataset("coords/coords_chrom", data=coords_chrom.astype("S"))
+        f.create_dataset("coords/coords_start", data=coords_start)
+        f.create_dataset("coords/coords_end", data=coords_end)
+        f.create_dataset("predictions/true_profs", data=true_profs)
+        f.create_dataset("predictions/log_pred_profs", data=log_pred_profs)
+        f.create_dataset("predictions/true_counts", data=true_counts)
+        f.create_dataset("predictions/log_pred_counts", data=log_pred_counts)

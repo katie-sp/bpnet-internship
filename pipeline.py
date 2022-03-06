@@ -53,8 +53,8 @@ if not hasattr(tqdm,'notebook'):
     tqdm.notebook = tqdm.std
 
 if __name__ == "__main__":
-    #sys.stdout = open('/home/katie/bp_repo/pipeline_outputs/stdout.txt', 'a')
-    #sys.stderr = open('/home/katie/bp_repo/pipeline_outputs/stderr.txt', 'a')
+    sys.stdout = open('/home/katie/bp_repo/pipeline_outputs/stdout.txt', 'a')
+    sys.stderr = open('/home/katie/bp_repo/pipeline_outputs/stderr.txt', 'a')
     
     import argparse
     # SET VARIABLES
