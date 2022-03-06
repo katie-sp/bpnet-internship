@@ -41,6 +41,9 @@ global tasks_path
 def set_tasks_path(tasks_path):
     tasks_path = tasks_path
     
+def get_tasks_path():
+    return tasks_path
+    
     
 device = torch.device("cuda") if torch.cuda.is_available() \
         else torch.device("cpu")
@@ -397,9 +400,6 @@ def train(train_dset, val_dset, train_loader, val_loader, model, num_epochs):
 
 # First, define constants and paths
 reference_fasta_path = '/home/katie/bp_repo/multitask_profile_model_SPI_GATA/data/genomes/hg38.fasta'
-#tasks_path = 'data/chip-seq/'
-tasks_path = 'data/cutnrun/'
-# MAKE THIS INTO GET_TASKS_PATH??
 
 input_length = 2114
 profile_length = 1000
