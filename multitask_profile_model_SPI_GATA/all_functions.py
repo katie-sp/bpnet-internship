@@ -1,6 +1,5 @@
-## ALL THE FUNCTIONS USED IN performance_evaluation.ipynb
+## ALL THE FUNCTIONS USED IN pipeline.py
 # mostly stuff from the original train_model_example notebook Alex shared with me
-# to run, this will need some modification to match the directories of your machine
 
 ## IMPORTS
 import sys
@@ -30,24 +29,8 @@ from plotting_helper import *
 # modify this for your own directory
 #os.chdir('/home/katie/bp_repo/multitask_profile_model_SPI_GATA/') # for SPI/GATA models
 os.chdir('/home/katie/bp_repo/research') # for CTCF/FOSL2 models
-
-
-# global functions to set variables
-global num_epochs
-def set_num_epochs(num_epochs):
-    num_epochs = num_epochs
     
-global tasks_path
-def set_tasks_path(tasks_path):
-    tasks_path = tasks_path
-    
-def get_tasks_path():
-    return tasks_path
-    
-    
-device = torch.device("cuda") if torch.cuda.is_available() \
-        else torch.device("cpu")
-
+device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
 
 ## DATA LOADING FUNCTIONS
 def dna_to_one_hot(seqs):
@@ -249,6 +232,74 @@ class BPDatasetWithControls(BPDatasetWithoutControls):
             coords_batch = np.concatenate([coords_batch, coords_batch])
         
         return input_seqs.astype(np.float32), true_profs.astype(np.float32), cont_profs.astype(np.float32)
+    
+class BPDatasetWithFakeControls(BPDatasetWithoutControls):
+    def _get_profiles_by_task(self, coords_batch, task):
+        """
+        Per task (a String):
+        For a B x 3 array of coordinates, returns the true profiles as a
+        B x O x 2 array, and the control profiles as a B x O x 2 array.
+        """
+        # Pad everything to the right size
+        mid = (coords_batch[:, 1] + coords_batch[:, 2]) // 2
+        coords_batch[:, 1] = mid - (profile_length // 2)
+        coords_batch[:, 2] = coords_batch[:, 1] + profile_length
+        
+        true_profs = np.empty((len(coords_batch), profile_length, 2))
+        cont_profs = np.zeros((len(coords_batch), profile_length, 2))
+        
+        tf_neg_reader = pyBigWig.open(glob.glob(tasks_path + task + '/' + task + '*neg.bw')[0], "r")
+        tf_pos_reader = pyBigWig.open(glob.glob(tasks_path + task + '/' + task + '*pos.bw')[0], "r")
+        
+        for i, (chrom, start, end) in enumerate(coords_batch):
+            true_profs[i, :, 0] = np.nan_to_num(tf_neg_reader.values(chrom, start, end))
+            true_profs[i, :, 1] = np.nan_to_num(tf_pos_reader.values(chrom, start, end))
+
+        tf_neg_reader.close()
+        tf_pos_reader.close()
+        
+        # insert a dimension at axis 1 to allow for concatenation over number of tasks
+        return np.expand_dims(true_profs,axis=1), np.expand_dims(cont_profs,axis=1)
+        
+    def _get_profiles(self, coords_batch, tasks):
+        """ 
+        For a list of tasks (each a String referring to a subdirectory of Data), 
+        call _get_profiles_by_task and concatenate all the tasks along axis=1
+        """
+        true_profs_list = []
+        cont_profs_list = []
+        for task in tasks:
+            true_profs, cont_profs = self._get_profiles_by_task(coords_batch, task)
+            true_profs_list.append(true_profs)
+            cont_profs_list.append(cont_profs)
+        
+        # concatenate over tasks 
+        return np.concatenate(true_profs_list,axis=1), np.concatenate(cont_profs_list,axis=1)
+    
+    def __getitem__(self, index):
+        """
+        Returns a batch of data as the input sequences, target profiles,
+        control profiles, and corresponding coordinates for the batch.
+        """
+        batch_slice = slice(index * self.batch_size, (index + 1) * self.batch_size)
+        coords_batch = self.coords[batch_slice]
+        
+        # Apply jitter
+        if self.jitter:
+            jitter_amount = np.random.randint(-self.jitter, self.jitter, size=len(coords_batch))
+            coords_batch[:, 1] = coords_batch[:, 1] + jitter_amount
+            coords_batch[:, 2] = coords_batch[:, 2] + jitter_amount
+            
+        input_seqs = self._get_input_seqs(coords_batch)
+        true_profs, cont_profs = self._get_profiles(coords_batch, getattr(self,'tasks'))
+        
+        if self.revcomp:
+            input_seqs = np.concatenate([input_seqs, np.flip(input_seqs, axis=(1, 2))])
+            true_profs = np.concatenate([true_profs, np.flip(true_profs, axis=(2, 3))])  # change axes to 2 and 3
+            cont_profs = np.concatenate([cont_profs, np.flip(cont_profs, axis=(2, 3))])  # to account for 4D rather than 3D
+            coords_batch = np.concatenate([coords_batch, coords_batch])
+        
+        return input_seqs.astype(np.float32), true_profs.astype(np.float32), cont_profs.astype(np.float32)
         
 def load_task_peak_table(bed_path, task):
     ''' From a bed file path for one task, create a peak table '''
@@ -260,6 +311,7 @@ def load_task_peak_table(bed_path, task):
     peak_table["start"] = peak_table["peak_start"] + peak_table["summit_offset"]
     peak_table["end"] = peak_table["start"] + 1
     peak_table["task"] = task
+    peak_table = peak_table.loc[peak_table.chrom != 'chrY']  # get rid of Y and M because they're dumb.
     peak_table = peak_table.loc[peak_table.chrom != 'chrM']
     return peak_table
 
@@ -293,8 +345,8 @@ class SimplePinningBatchWithoutControls:
     
 class SimplePinningBatchWithControls(SimplePinningBatchWithoutControls):
     def __init__(self, data):
-        super().__init__()
-        self.cont_profs = torch.tensor(data_tuple[2]).float()
+        super().__init__(data)
+        self.cont_profs = torch.tensor(data[0][2]).float()
         
     # custom memory pinning method on custom type
     def pin_memory(self):
@@ -310,7 +362,7 @@ def collate_wrapper_with_controls(batch):
     return SimplePinningBatchWithControls(batch)
 
 ## TRAINING FUNCTIONS - only a few minor changes from Alex's code
-def run_epoch(data_loader, model, mode, optimizer=None, controls=False):
+def run_epoch(data_loader, model, mode, optimizer=None):
     if mode == "train":
         model.train()
         torch.set_grad_enabled(True)
@@ -345,6 +397,7 @@ def run_epoch(data_loader, model, mode, optimizer=None, controls=False):
         t_iter.set_description(
             "\tLoss: %6.4f" % loss.item()
         )
+    torch.cuda.empty_cache()  # EDIT MAR 16
     return batch_losses, prof_losses, count_losses
 
 def train(train_dset, val_dset, train_loader, val_loader, model, num_epochs):
@@ -410,13 +463,9 @@ test_chroms = ["chr1"]
 
 counts_loss_weight = 20
 learning_rate = 0.001
-num_epochs = 10 # original 5
-    
-base_kwargs = {'reference_fasta_path':reference_fasta_path, 
-               'tasks_path':tasks_path, 'dna_to_one_hot': dna_to_one_hot}
 
 # Actual evaluation function (combines all the functions above)
-def evaluate(train_tasks, val_tasks, test_tasks, num_tasks, assay, controls=True,
+def evaluate(train_tasks, val_tasks, test_tasks, num_tasks, assay,
              epoch_metrics=False, model_save_path=None):
     ''' 
     Given tasks, return a list with the loss (after each epoch) and performance metrics
@@ -428,10 +477,18 @@ def evaluate(train_tasks, val_tasks, test_tasks, num_tasks, assay, controls=True
     assay: either chip-seq or cutnrun
     
     Optional:
-    controls: (bool) whether or not to use a controls file
+    #controls: (bool) whether or not to use a controls file  # REMOVED MAR 16
     epoch_metrics: (bool) whether or not to save metrics after every epoch
     model_save_path: (str) where to save trained model
     '''
+    print(f'num epochs: {num_epochs}')
+    print(f'tasks path: {tasks_path}')
+    #num_epochs = get_num_epochs()#10 # original 5
+    
+    #BASE KWARGS
+    base_kwargs = {'reference_fasta_path':reference_fasta_path, 
+               'tasks_path':tasks_path, 'dna_to_one_hot': dna_to_one_hot}
+    
     train_tasks.sort()  # alphabetize everything, to be safe
     val_tasks.sort()
     test_tasks.sort()
@@ -522,12 +579,25 @@ def evaluate(train_tasks, val_tasks, test_tasks, num_tasks, assay, controls=True
     FINAL_METRICS = profile_performance.log_performance_metrics(metrics)
     return LOSS_LIST, FINAL_METRICS
 
+global tasks_path
+def set_tasks_path(tp):
+    global tasks_path
+    tasks_path = tp
+    
+def get_tasks_path():
+    return tasks_path
 
 # added March 5, 2022
 class DataLoader():
     ''' Load up data! '''
-    def __init__(self, tasks, assay, controls, tasks_path, subset, jitter=False):
-        ''' subset should be a list of some combination of "train", "test", "val", "full" ''' 
+    def __init__(self, tasks, assay, controls, tasks_path, subset, jitter=False, fake_controls=False):
+        ''' subset should be a list of some combination of "train", "test", "val", "full" 
+            Added March 16: fake_controls is if you need to get predictions using a ChIP-seq model
+            trained with controls, but you don't want to use controls (for the March tasks)
+            
+            IF USING REAL OR FAKE CONTROLS, MUST HAVE CONTROLS=TRUE. Even with fake_controls=True, NEED CONTROLS=TRUE
+        ''' 
+        set_tasks_path(tasks_path)
         self.tasks = tasks
         self.tasks.sort()    # alphabetize everything, to be safe
         self.assay = assay
@@ -535,11 +605,13 @@ class DataLoader():
         self.tasks_path = tasks_path
         self.subset = subset
         self.jitter = jitter
+        self.fake_controls = fake_controls
+        set_tasks_path(tasks_path)
         
     def make_loaders(self):
         ''' Create dataloaders ''' 
-
-        kwargs = base_kwargs.copy()
+        kwargs = {'reference_fasta_path':reference_fasta_path, 
+               'tasks_path':self.tasks_path, 'dna_to_one_hot': dna_to_one_hot}
         kwargs['tasks'] = self.tasks
 
         peak_table = load_peak_tables(self.tasks)
@@ -570,6 +642,8 @@ class DataLoader():
         num_workers = 15
 
         BPDataset = BPDatasetWithControls if self.controls else BPDatasetWithoutControls
+        if self.fake_controls:
+            BPDataset = BPDatasetWithFakeControls  # added March 16
         train_dset = BPDataset(train_coords,**kwargs)
         val_dset = BPDataset(val_coords,**kwargs)
         test_dset = BPDataset(test_coords,**kwargs)

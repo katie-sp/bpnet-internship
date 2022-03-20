@@ -20,12 +20,12 @@ import tqdm
 import glob
 import pickle
 
+import all_functions 
+from all_functions import *
+
 import profile_models
 from profile_models import place_tensor, ModelLoader
 import profile_performance
-
-import all_functions 
-from all_functions import *
 
 import plotting_helper
 from plotting_helper import *
@@ -53,8 +53,8 @@ if not hasattr(tqdm,'notebook'):
     tqdm.notebook = tqdm.std
 
 if __name__ == "__main__":
-    sys.stdout = open('/home/katie/bp_repo/pipeline_outputs/stdout.txt', 'a')
-    sys.stderr = open('/home/katie/bp_repo/pipeline_outputs/stderr.txt', 'a')
+    # sys.stdout = open('/home/katie/bp_repo/pipeline_outputs/stdout.txt', 'a')
+    # sys.stderr = open('/home/katie/bp_repo/pipeline_outputs/stderr.txt', 'a')
     
     import argparse
     # SET VARIABLES
@@ -92,17 +92,17 @@ if __name__ == "__main__":
     INFO = f'Assay: {assay}\nTasks: {tasks}\nNumber of tasks: {num_tasks}\nControls: {controls}\nOutput directory: {outdir}\nNumber of epochs: {num_epochs}\nEpoch metrics saved: {epoch_metrics}'
     sys.stderr.write(f'\n-------------------------------------\nDate: {date.today().strftime("%B %d, %Y")}\n{INFO}\n')
     sys.stdout.write(f'\n-------------------------------------\nDate: {date.today().strftime("%B %d, %Y")}\n{INFO}\n')
-
     
-    set_num_epochs(num_epochs)
     os.makedirs(outdir, exist_ok=True)
 
     tasks_path = f'/home/katie/bp_repo/research/data/{assay}/'
-    set_tasks_path(tasks_path)
+    all_functions.tasks_path = tasks_path
+    all_functions.num_epochs = num_epochs
+    all_functions.controls = controls
 
     # TRAINING
-    metrics, losses = evaluate(tasks, tasks, tasks, num_tasks, assay, controls, epoch_metrics,
-                               model_save_path=outdir + 'model.state_dict')
+    metrics, losses = evaluate(tasks, tasks, tasks, num_tasks, assay, #controls, 
+                               epoch_metrics, model_save_path=outdir + 'model.state_dict')
     pickle.dump(metrics, open(outdir + 'metrics.pkl', 'wb'))
     pickle.dump(losses, open(outdir + 'losses.pkl', 'wb'))
 
