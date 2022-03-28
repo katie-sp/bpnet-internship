@@ -258,7 +258,7 @@ class ProfilePredictorWithoutControls(ProfilePredictor):
         """
         Computes a forward pass on a batch of sequences.
         Arguments:
-            `inputs_seqs`: a B x I x D tensor, where B is the batch size, I is
+            `input_seqs`: a B x I x D tensor, where B is the batch size, I is
                 the input sequence length, and D is the number of input channels
         Returns the predicted profiles (unnormalized logits) for each task and
         each strand (a B x T x O x S tensor), and the predicted log

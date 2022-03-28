@@ -301,12 +301,13 @@ class BPDatasetWithFakeControls(BPDatasetWithoutControls):
         
         return input_seqs.astype(np.float32), true_profs.astype(np.float32), cont_profs.astype(np.float32)
         
-def load_task_peak_table(bed_path, task):
-    ''' From a bed file path for one task, create a peak table '''
+def load_task_peak_table(bed_path, task, header=None):
+    ''' From a bed file path for one task, create a peak table 
+        Mar 23, 2022: I added header=None so that I can load in tsvs easily without header issues'''
     column_names= [ "chrom", "peak_start", "peak_end", "name", "score",
          "strand", "signal", "pval", "qval", "summit_offset",
                   'i0','i1','i2','i3','i4','i5','i6','i7','i8','i9']  # IDR files have 10 columns of replicate data
-    peak_table = pd.read_csv(bed_path,header=None,sep='\t')
+    peak_table = pd.read_csv(bed_path,header=header,sep='\t')
     peak_table.columns = column_names[:len(peak_table.columns)]
     peak_table["start"] = peak_table["peak_start"] + peak_table["summit_offset"]
     peak_table["end"] = peak_table["start"] + 1
@@ -590,12 +591,15 @@ def get_tasks_path():
 # added March 5, 2022
 class DataLoader():
     ''' Load up data! '''
-    def __init__(self, tasks, assay, controls, tasks_path, subset, jitter=False, fake_controls=False):
+    def __init__(self, tasks, assay, controls, tasks_path, subset, jitter=False, fake_controls=False,
+                 premade_tsv_path=None):
         ''' subset should be a list of some combination of "train", "test", "val", "full" 
             Added March 16: fake_controls is if you need to get predictions using a ChIP-seq model
             trained with controls, but you don't want to use controls (for the March tasks)
             
             IF USING REAL OR FAKE CONTROLS, MUST HAVE CONTROLS=TRUE. Even with fake_controls=True, NEED CONTROLS=TRUE
+            
+            Added Mar 21: Can pass in path to tsv to directly load in peak table there (e.g., for unique/shared peaks)
         ''' 
         set_tasks_path(tasks_path)
         self.tasks = tasks
@@ -606,18 +610,26 @@ class DataLoader():
         self.subset = subset
         self.jitter = jitter
         self.fake_controls = fake_controls
+        self.premade_tsv_path = premade_tsv_path
         set_tasks_path(tasks_path)
         
     def make_loaders(self):
         ''' Create dataloaders ''' 
         kwargs = {'reference_fasta_path':reference_fasta_path, 
-               'tasks_path':self.tasks_path, 'dna_to_one_hot': dna_to_one_hot}
-        kwargs['tasks'] = self.tasks
+               'tasks_path':self.tasks_path, 'dna_to_one_hot': dna_to_one_hot, 
+                 'tasks':self.tasks}
 
-        peak_table = load_peak_tables(self.tasks)
+        if self.premade_tsv_path is None:
+            peak_table = load_peak_tables(self.tasks) 
+        else:
+            print(self.tasks[0])
+            print(self.premade_tsv_path)
+            peak_table = load_task_peak_table(self.premade_tsv_path, self.tasks[0], header=0)  # for tsvs, must set 0th row as header!!
+        print(peak_table.shape)
 
 
         # equivalent to all_coords in the original code
+        print(peak_table.columns)
         all_coords = peak_table[["chrom", "start", "end", "task"]].values  # need task to create statuses
 
         train_coords = all_coords [np.isin(all_coords[:, 0], train_chroms)]
@@ -644,10 +656,11 @@ class DataLoader():
         BPDataset = BPDatasetWithControls if self.controls else BPDatasetWithoutControls
         if self.fake_controls:
             BPDataset = BPDatasetWithFakeControls  # added March 16
-        train_dset = BPDataset(train_coords,**kwargs)
-        val_dset = BPDataset(val_coords,**kwargs)
-        test_dset = BPDataset(test_coords,**kwargs)
-        full_dset = BPDataset(all_coords[:,:-1],**kwargs)   # need to remove "task" column from all_coords
+        
+        train_dset = BPDataset(train_coords, jitter=self.jitter, **kwargs)  # added jitter Mar 27 2022
+        val_dset = BPDataset(val_coords, jitter=self.jitter, **kwargs)
+        test_dset = BPDataset(test_coords, jitter=self.jitter, **kwargs)
+        full_dset = BPDataset(all_coords[:,:-1], jitter=self.jitter, **kwargs)  # need to remove "task" column from all_coords
 
         collate_wrapper = collate_wrapper_with_controls if self.controls else collate_wrapper_without_controls
         train_loader = torch.utils.data.DataLoader(train_dset,num_workers=15,collate_fn=collate_wrapper,pin_memory=True)

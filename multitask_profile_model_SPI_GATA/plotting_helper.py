@@ -45,7 +45,7 @@ def get_predictions(data_loader, model):
     all_true_profs, all_log_pred_profs, all_true_counts, all_log_pred_counts = [], [], [], []
     
     for batch in tqdm.notebook.tqdm(data_loader):
-        input_seqs = batch.input_seqs.cuda(device=device, non_blocking=True)   # original
+        input_seqs = batch.input_seqs.cuda(device=device, non_blocking=True)   
         true_profs_np = batch.true_profs.numpy()
 
         if isinstance(model, profile_models.ProfilePredictorWithControls):

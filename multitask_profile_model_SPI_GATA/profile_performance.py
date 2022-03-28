@@ -140,7 +140,7 @@ def _kl_divergence(probs1, probs2):
 
 def jensen_shannon_distance(probs1, probs2):
     """
-    Computes the Jesnsen-Shannon distance in the last dimension of `probs1` and
+    Computes the Jensen-Shannon distance in the last dimension of `probs1` and
     `probs2`. `probs1` and `probs2` must be the same shape. For example, if they
     are both A x B x L arrays, then the KL divergence of corresponding L-arrays
     will be computed and returned in an A x B array. This will renormalize the

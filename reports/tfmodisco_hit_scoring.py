@@ -91,7 +91,7 @@ if __name__ == "__main__":
         usecols=[0, 1, 2, 9],
         names=["peak_chrom", "peak_start", "peak_end", "summit_offset"]
     )
-    
+
     # Expand peaks to input length
     peak_table["peak_start"] = \
         (peak_table["peak_start"] + peak_table["summit_offset"]) - \

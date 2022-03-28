@@ -24,6 +24,7 @@ import pickle
 
 import profile_models
 from profile_models import place_tensor
+from profile_models import ModelLoader
 import profile_performance
 
 import all_functions 
@@ -65,6 +66,13 @@ if __name__ == "__main__":
     # modelpath: path to pretrained model
     # outhead: which head of model, either "profile" or "count", to explain in DeepSHAP & after. default "profile"
     
+    sys.stdout = open('/home/katie/bp_repo/pipeline_outputs/stdout.txt', 'a')
+    sys.stderr = open('/home/katie/bp_repo/pipeline_outputs/stderr.txt', 'a')
+    
+    from datetime import date
+    sys.stderr.write(f'\n-------------------------------------\nDate: {date.today().strftime("%B %d, %Y")}\n')
+    sys.stdout.write(f'\n-------------------------------------\nDate: {date.today().strftime("%B %d, %Y")}\n')
+    
     parser = argparse.ArgumentParser(description='Pipeline')
     
     parser.add_argument('--assay', '-a', type=str,
@@ -79,6 +87,11 @@ if __name__ == "__main__":
                         help='Path to pretrained model')
     parser.add_argument('--outhead', '-p', type=str, default='profile',
                         help='Which head of model, either "profile" or "count", to explain in DeepSHAP & after. default "profile"')
+    parser.add_argument('--fake-controls', '-f', action='store_true',
+                        help='Whether to use all 0s for controls (e.g., for running ChIP-seq model on CUT&RUN data. **Even if \
+                        fake controls are used, STILL NEED TO SET CONTROLS TO TRUE.\nTHIS DEFAULTS TO FALSE. If -f included, fake controls used')
+    parser.add_argument('--subset', '-s', type=str, default=None,
+                        help='Optional; if used, choices are `unique` or `shared` to reflect which subset of peaks to use')
 
     args = parser.parse_args()
     assay = args.assay
@@ -87,21 +100,40 @@ if __name__ == "__main__":
     outdir = args.outdir
     model_path = args.modelpath
     output_head = args.outhead
+    fake_controls = args.fake_controls
+    subset = args.subset
     assert output_head in ['profile', 'count']
+    print(f'assay: {assay} and tasks: {tasks}')
     print(f'output head: {output_head}')
     print(f'model path: {model_path}')
+    print(f'outdir: {outdir}')
+    print(f'controls: {controls} and fake controls: {fake_controls}')
+    print(f'subset: {subset}') 
     num_tasks = len(tasks)
-    
-    from datetime import date
+
     os.makedirs(outdir, exist_ok=True)
     
     tasks_path = f'/home/katie/bp_repo/research/data/{assay}/'
-    set_tasks_path(tasks_path)
-
+    all_functions.tasks_path = tasks_path
+    all_functions.controls = controls
     
     # LOAD MODEL
-    model = ModelLoader(controls, num_tasks, model_path + 'model.state_dict').load_model()
-    full_dataloader = DataLoader(tasks, assay, controls, tasks_path, ['full'], jitter=False).make_loaders()['full']
+    model = ModelLoader(model_path + 'model.state_dict', controls, num_tasks).load_model()
+    
+    # If given a specific subset, get the premade tsv path. Otherwise, set it to None
+    NOT_assay = 'cutnrun' if assay=='chip-seq' else 'chip-seq'  # NOT the assay we want peaks from
+    if subset == 'unique':
+        premade_tsv_path = f'/home/katie/bp_repo/reports/katie_notebooks/round2_tasks_mar2022/TASK_1/{tasks[0]}_{assay[:-4]}_unique_no_{NOT_assay[:-4]}'
+        print('premade_tsv_path: ' + premade_tsv_path)
+    elif subset == 'shared':
+        premade_tsv_path = f'/home/katie/bp_repo/reports/katie_notebooks/round2_tasks_mar2022/TASK_1/{tasks[0]}_{assay[:-4]}_unique_shared_{NOT_assay[:-4]}'
+        print('premade_tsv_path: ' + premade_tsv_path)
+    else:
+        premade_tsv_path = None
+        
+    # Create the full dataloader
+    full_dataloader = DataLoader(tasks, assay, controls, tasks_path, ['full'], jitter=False, 
+                                 fake_controls=fake_controls, premade_tsv_path=premade_tsv_path).make_loaders()['full']
 
     # DeepSHAP
     control_type = 'matched' if controls else None
