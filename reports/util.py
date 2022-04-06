@@ -163,7 +163,12 @@ def import_peak_table(peak_bed_paths):
         table = pd.read_csv(peak_bed_path, sep="\t", header=None)
         table.columns = column_names[:len(table.columns)]
         
+        if table.iloc[0][0] == 'chrom':
+            table.drop(0, axis=0, inplace=True)  # drop stupid header row if it's there (like when it's a tsv)
+        
         # Add summit location column
+        table["peak_start"], table["peak_end"], table["summit_offset"], table["chrom"] = \
+        table["peak_start"].astype(int), table["peak_end"].astype(int), table["summit_offset"].astype(int), table["chrom"].astype(str)
         table["summit"] = table["peak_start"] + table["summit_offset"]
         tables.append(table)
     return pd.concat(tables)
