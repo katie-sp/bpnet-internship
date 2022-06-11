@@ -484,7 +484,6 @@ def evaluate(train_tasks, val_tasks, test_tasks, num_tasks, assay,
     '''
     print(f'num epochs: {num_epochs}')
     print(f'tasks path: {tasks_path}')
-    #num_epochs = get_num_epochs()#10 # original 5
     
     #BASE KWARGS
     base_kwargs = {'reference_fasta_path':reference_fasta_path, 
@@ -533,7 +532,7 @@ def evaluate(train_tasks, val_tasks, test_tasks, num_tasks, assay,
     num_workers = 15
 
     BPDataset = BPDatasetWithControls if controls else BPDatasetWithoutControls
-    train_dset = BPDataset(train_coords,**train_kwargs)
+    train_dset = BPDataset(train_coords,**train_kwargs)   # so these dsets HAVE JITTER=128
     val_dset = BPDataset(val_coords,**val_kwargs)
     test_dset = BPDataset(test_coords,**test_kwargs)
 
@@ -569,6 +568,8 @@ def evaluate(train_tasks, val_tasks, test_tasks, num_tasks, assay,
         torch.save(model.state_dict(), model_save_path)
         
     true_profs, log_pred_profs, true_counts, log_pred_counts = get_predictions(test_loader, model)
+    # ok so im pretty sure these metrics are a lil sus because this test_loader HAS JITTER=128
+    # and you probably actually want the metrics to be with no jitter? could check with alex (as of may 5 2022)
     
     metrics = profile_performance.compute_performance_metrics(
         true_profs, log_pred_profs, true_counts, log_pred_counts,
