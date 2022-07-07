@@ -714,3 +714,41 @@ def save_preds(dataloader, model, outdir, batch_size=128):
         f.create_dataset("predictions/log_pred_profs", data=log_pred_profs)
         f.create_dataset("predictions/true_counts", data=true_counts)
         f.create_dataset("predictions/log_pred_counts", data=log_pred_counts)
+        
+        
+# added july 6       
+def save_preds_by_subset(model, tf, assay, controls, save_path, peak_subset, chrom_subset='test'):
+    ''' Save predictions on a specific peak subset 
+        **** If you have a chip-seq model, this ASSUMES YOU WANT TO USE FAKE CONTROLS
+        would need to manually edit code to not do this (should be ez pz if necessary though)
+        
+        n.b.: saves preds for both possibilities under this peak subset. For example,
+        if you specify peak_subset = 'unique' then it saves (separately) the ChIP-seq unique and the 
+        CUT&RUN unique peaks' preds
+    '''
+    assert assay in ['chip-seq', 'cutnrun']
+    assert peak_subset in ['unique', 'shared']
+    assert save_path[-1] == '/'
+    
+    NOT_ASSAY = 'chip-seq' if assay == 'cutnrun' else 'cutnrun'
+    SUBSET_ID = 'no' if 'unique' else 'shared'
+    print('This is NOT the assay: ' + NOT_ASSAY)
+    
+    tasks_path = '/home/katie/bp_repo/research/data/' + assay + '/'
+    
+    premade_tsv_path = f'{tf}_{ assay[:-4] }_unique_{SUBSET_ID}_{ NOT_ASSAY[:-4] }'
+    print(f'Tasks path: {tasks_path}\nTSV path: {premade_tsv_path}')
+    
+    dataloader = DataLoader(tasks=[tf], assay=assay, controls=controls, fake_controls=controls,
+                            tasks_path=tasks_path, subset=[chrom_subset], jitter=False, 
+                            premade_tsv_path=f'{subsets_path_root}{premade_tsv_path}').make_loaders()[chrom_subset]
+    save_preds(dataloader, model, f'{save_path}{peak_subset}_{ assay[:-4] }_loader.preds')
+    
+    
+    premade_tsv_path = f'{tf}_{ NOT_ASSAY[:-4] }_unique_{SUBSET_ID}_{ assay[:-4] }'
+    print(f'Tasks path: {tasks_path}\nTSV path: {premade_tsv_path}')
+    
+    dataloader = DataLoader(tasks=[tf], assay=assay, controls=controls, fake_controls=controls,
+                            tasks_path=tasks_path, subset=[chrom_subset], jitter=False, 
+                            premade_tsv_path=f'{subsets_path_root}{premade_tsv_path}').make_loaders()[chrom_subset]
+    save_preds(dataloader, model, f'{save_path}{peak_subset}_{ NOT_ASSAY[:-4] }_loader.preds')

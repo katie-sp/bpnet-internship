@@ -97,7 +97,8 @@ def import_profiles(preds_path):
     corresponding coordinates.
     """
     with h5py.File(preds_path, "r") as f:
-        num_seqs, num_tasks, input_length, _ = f["predictions"]["true_profs"].shape
+        # edited line below on july 5, 2022 to log_pred_profs (used to be true_profs)
+        num_seqs, num_tasks, input_length, _ = f["predictions"]["log_pred_profs"].shape  
         batch_size = min(1000, num_seqs)
         num_batches = int(np.ceil(num_seqs / batch_size))
         

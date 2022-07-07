@@ -5,6 +5,8 @@ import scipy.special
 import scipy.ndimage
 import h5py
 from datetime import datetime
+import pandas as pd
+import pickle
 
 def multinomial_log_probs(
     category_log_probs, trials, query_counts, return_cross_entropy=True
@@ -694,3 +696,20 @@ def log_performance_metrics(metrics):
              ", ".join([("%6.6f" % x) for x in count_pears]),
              ", ".join([("%6.6f" % x) for x in count_spear]),
              ", ".join([("%6.6f" % x) for x in count_mse]) ]
+
+
+# functions added july 6, 2022
+def load_metrics(pickles: list, ids: list):
+    ''' Load pickled LISTS of metrics into a pretty Pandas dataframe '''
+    assert len(pickles) == len(ids), 'Number of pickles passed in does not match number of ids provided'
+    
+    columns = ['Test profile NLL', 'Test profile cross entropy', 'Test profile JSD', 'Test profile Pearson', 
+           'Test profile Spearman', 'Test profile MSE', 
+           'Test count Pearson', 'Test count Spearman', 'Test count MSE']
+    metrics = pd.DataFrame(columns=columns, index=ids)
+    
+    for i in range(len(ids)):
+        pkl, index = pickles[i], ids[i]
+        with open(pkl, 'rb') as file:
+            metrics.loc[index, :] = pickle.load(file)
+    return metrics
