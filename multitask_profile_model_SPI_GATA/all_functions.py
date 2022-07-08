@@ -717,7 +717,8 @@ def save_preds(dataloader, model, outdir, batch_size=128):
         
         
 # added july 6       
-def save_preds_by_subset(model, tf, assay, controls, save_path, peak_subset, chrom_subset='test'):
+def save_preds_by_subset(model, tf, assay, controls, save_path, peak_subset, chrom_subset='test',
+                        subsets_path_root='/home/katie/bp_repo/reports/katie_notebooks/round2_tasks_mar2022/TASK_1/'):
     ''' Save predictions on a specific peak subset 
         **** If you have a chip-seq model, this ASSUMES YOU WANT TO USE FAKE CONTROLS
         would need to manually edit code to not do this (should be ez pz if necessary though)
@@ -731,7 +732,7 @@ def save_preds_by_subset(model, tf, assay, controls, save_path, peak_subset, chr
     assert save_path[-1] == '/'
     
     NOT_ASSAY = 'chip-seq' if assay == 'cutnrun' else 'cutnrun'
-    SUBSET_ID = 'no' if 'unique' else 'shared'
+    SUBSET_ID = 'no' if peak_subset =='unique' else 'shared'
     print('This is NOT the assay: ' + NOT_ASSAY)
     
     tasks_path = '/home/katie/bp_repo/research/data/' + assay + '/'

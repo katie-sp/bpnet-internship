@@ -699,17 +699,32 @@ def log_performance_metrics(metrics):
 
 
 # functions added july 6, 2022
-def load_metrics(pickles: list, ids: list):
-    ''' Load pickled LISTS of metrics into a pretty Pandas dataframe '''
-    assert len(pickles) == len(ids), 'Number of pickles passed in does not match number of ids provided'
+def load_metrics(pickles: list, ids: list, multiindexing=True):
+    ''' Load pickled LISTS of metrics into a pretty Pandas dataframe 
+        If multiindexing is set to True, then you must pass in (for `ids`) a list of 2 lists whose product will be used to
+        construct the multi-index
+    '''
+    assert len(pickles) == np.product(list(len(i) for i in ids)) or len(pickles) == len(ids), \
+        f'Number of pickles passed in ( {len(pickles)}) does not match number of ids provided ({np.product(list(len(i) for i in ids))})'
     
     columns = ['Test profile NLL', 'Test profile cross entropy', 'Test profile JSD', 'Test profile Pearson', 
            'Test profile Spearman', 'Test profile MSE', 
            'Test count Pearson', 'Test count Spearman', 'Test count MSE']
-    metrics = pd.DataFrame(columns=columns, index=ids)
-    
-    for i in range(len(ids)):
-        pkl, index = pickles[i], ids[i]
-        with open(pkl, 'rb') as file:
-            metrics.loc[index, :] = pickle.load(file)
+    if multiindexing:
+        ids = pd.MultiIndex.from_product(ids)
+        metrics = pd.DataFrame(index=ids, columns=columns)
+        for i in range(len(ids)):
+            pkl, index = pickles[i], ids[i]
+            print(pkl[-50:])
+            print(index)
+            print('\n')
+            with open(pkl, 'rb') as file:
+                metrics.loc[index, :] = pickle.load(file)
+        
+    else:
+        metrics = pd.DataFrame(index=ids, columns=columns)
+        for i in range(len(ids)):
+            pkl, index = pickles[i], ids[i]
+            with open(pkl, 'rb') as file:
+                metrics.loc[index, :] = pickle.load(file)
     return metrics
