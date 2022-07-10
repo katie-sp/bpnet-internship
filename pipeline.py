@@ -101,7 +101,7 @@ if __name__ == "__main__":
     all_functions.controls = controls
 
     # TRAINING
-    metrics, losses = evaluate(tasks, tasks, tasks, num_tasks, assay, #controls, 
+    losses, metrics = evaluate(tasks, tasks, tasks, num_tasks, assay, #controls, 
                                epoch_metrics, model_save_path=outdir + 'model.state_dict')
     pickle.dump(metrics, open(outdir + 'metrics.pkl', 'wb'))
     pickle.dump(losses, open(outdir + 'losses.pkl', 'wb'))
