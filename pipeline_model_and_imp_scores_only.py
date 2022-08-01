@@ -79,6 +79,11 @@ if __name__ == "__main__":
                         help='Number of epochs to train model. Default 10')
     parser.add_argument('--metrics', '-m', action='store_true',
                         help='SWITCH! If NOT included, epoch metrics are NOT saved. If -m included, epoch metrics are saved.')
+    parser.add_argument('--learning-rate', '-l', type=int, default=0.001,
+                        help='Log learning rate; should be between -5 and -1 (then lr = 10^lr). Default 0.001 (-3)')
+    parser.add_argument('--counts-loss-weight', '-w', type=int, default=20,
+                        help='Log counts loss weight; should be between 0 and 3 (then clw = 10^clw). Default 20')
+    
     args = parser.parse_args()
     assay = args.assay
     tasks = sorted(args.tasks)
@@ -87,9 +92,11 @@ if __name__ == "__main__":
     num_epochs = args.epochs
     epoch_metrics = args.metrics
     num_tasks = len(tasks)
+    learning_rate = args.learning_rate
+    counts_loss_weight = args.counts_loss_weight
     
     from datetime import date
-    INFO = f'Assay: {assay}\nTasks: {tasks}\nNumber of tasks: {num_tasks}\nControls: {controls}\nOutput directory: {outdir}\nNumber of epochs: {num_epochs}\nEpoch metrics saved: {epoch_metrics}'
+    INFO = f'Assay: {assay}\nTasks: {tasks}\nNumber of tasks: {num_tasks}\nControls: {controls}\nOutput directory: {outdir}\nNumber of epochs: {num_epochs}\nEpoch metrics saved: {epoch_metrics}\nLearning rate: {learning_rate}\nCounts loss weight: {counts_loss_weight} or {10**counts_loss_weight}'
     sys.stderr.write(f'\n-------------------------------------\nDate: {date.today().strftime("%B %d, %Y")}\n{INFO}\n')
     sys.stdout.write(f'\n-------------------------------------\nDate: {date.today().strftime("%B %d, %Y")}\n{INFO}\n')
     
@@ -101,8 +108,10 @@ if __name__ == "__main__":
     all_functions.controls = controls
 
     # TRAINING
-    losses, metrics = evaluate(tasks, tasks, tasks, num_tasks, assay, #controls, 
-                               epoch_metrics, model_save_path=outdir + 'model.state_dict')
+    losses, metrics = evaluate(tasks, tasks, tasks, num_tasks, assay,
+                               epoch_metrics, model_save_path=outdir + 'model.state_dict',
+                               counts_loss_weight=10**counts_loss_weight, learning_rate=10**learning_rate)
+    
     pickle.dump(metrics, open(outdir + 'metrics.pkl', 'wb'))
     pickle.dump(losses, open(outdir + 'losses.pkl', 'wb'))
 

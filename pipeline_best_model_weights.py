@@ -53,9 +53,6 @@ if not hasattr(tqdm,'notebook'):
     tqdm.notebook = tqdm.std
 
 if __name__ == "__main__":
-    # sys.stdout = open('/home/katie/bp_repo/pipeline_outputs/stdout.txt', 'a')
-    # sys.stderr = open('/home/katie/bp_repo/pipeline_outputs/stderr.txt', 'a')
-    
     import argparse
     # SET VARIABLES
     
@@ -75,38 +72,38 @@ if __name__ == "__main__":
                         help='SWITCH! If NOT included, no controls are used. If -c included, controls used.')
     parser.add_argument('--outdir', '-o', type=str,
                         help='Output directory, like /home/katie/bp_repo/pipeline_outputs/fosl2_chipseq_oct3/')
-    parser.add_argument('--epochs', '-e', type=int, default=10,
-                        help='Number of epochs to train model. Default 10')
-    parser.add_argument('--metrics', '-m', action='store_true',
-                        help='SWITCH! If NOT included, epoch metrics are NOT saved. If -m included, epoch metrics are saved.')
+    
     args = parser.parse_args()
     assay = args.assay
     tasks = sorted(args.tasks)
     controls = args.controls
     outdir = args.outdir
-    num_epochs = args.epochs
-    epoch_metrics = args.metrics
+    epoch_metrics = False
     num_tasks = len(tasks)
     
     from datetime import date
-    INFO = f'Assay: {assay}\nTasks: {tasks}\nNumber of tasks: {num_tasks}\nControls: {controls}\nOutput directory: {outdir}\nNumber of epochs: {num_epochs}\nEpoch metrics saved: {epoch_metrics}'
-    sys.stderr.write(f'\n-------------------------------------\nDate: {date.today().strftime("%B %d, %Y")}\n{INFO}\n')
-    sys.stdout.write(f'\n-------------------------------------\nDate: {date.today().strftime("%B %d, %Y")}\n{INFO}\n')
     
-    os.makedirs(outdir, exist_ok=True)
+    # "In each run, randomly select (uniformly in logarithmic space) a 
+    # learning rate between 10^-5 and 10^-1, and a 
+    # counts loss weight between 10^0 and 10^3."
+    counts_loss_weights = [0, 1, 2, 3]
+    learning_rates = [-5, -4, -3, -2, -1]
+    
+    for learning_rate in learning_rates:
+        for counts_loss_weight in counts_loss_weights:
+            INFO=f'Assay: {assay}\nTasks: {tasks}\nNumber of tasks: {num_tasks}\nControls: {controls}\nOutput directory: {outdir}'
+            sys.stderr.write(f'\n-------------------------------------\nDate: {date.today().strftime("%B %d, %Y")}\n{INFO}\n')
+            sys.stdout.write(f'\n-------------------------------------\nDate: {date.today().strftime("%B %d, %Y")}\n{INFO}\n')
 
-    tasks_path = f'/home/katie/bp_repo/research/data/{assay}/'
-    all_functions.tasks_path = tasks_path
-    all_functions.num_epochs = num_epochs
-    all_functions.controls = controls
+            os.makedirs(outdir, exist_ok=True)
 
-    # TRAINING
-    losses, metrics = evaluate(tasks, tasks, tasks, num_tasks, assay,
-                               epoch_metrics, model_save_path=outdir + 'model.state_dict')
-    pickle.dump(metrics, open(outdir + 'metrics.pkl', 'wb'))
-    pickle.dump(losses, open(outdir + 'losses.pkl', 'wb'))
+            tasks_path = f'/home/katie/bp_repo/research/data/{assay}/'
+            all_functions.tasks_path = tasks_path
+            all_functions.num_epochs = 5
+            all_functions.controls = controls
 
-    # SAVE PREDICTIONS
-    model = ModelLoader(outdir + 'model.state_dict', controls, num_tasks).load_model()
-    full_dataloader = DataLoader(tasks, assay, controls, tasks_path, ['full'], jitter=False).make_loaders()['full']
-    save_preds(full_dataloader, model, outdir + 'preds')
+            # TRAINING
+            losses, metrics = evaluate(tasks, tasks, tasks, num_tasks, assay,
+                     epoch_metrics, counts_loss_weight=10**counts_loss_weight,
+                                       learning_rate=10**learning_rate)
+            pickle.dump(metrics, open(f'{outdir}metrics_lr{learning_rate}_clw{counts_loss_weight}.pkl', 'wb'))

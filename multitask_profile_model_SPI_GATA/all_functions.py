@@ -467,7 +467,8 @@ learning_rate = 0.001
 
 # Actual evaluation function (combines all the functions above)
 def evaluate(train_tasks, val_tasks, test_tasks, num_tasks, assay,
-             epoch_metrics=False, model_save_path=None):
+             epoch_metrics=False, model_save_path=None,
+             counts_loss_weight=counts_loss_weight, learning_rate=learning_rate):
     ''' 
     Given tasks, return a list with the loss (after each epoch) and performance metrics
     Args:
@@ -626,11 +627,9 @@ class DataLoader():
             print(self.tasks[0])
             print(self.premade_tsv_path)
             peak_table = load_task_peak_table(self.premade_tsv_path, self.tasks[0], header=0)  # for tsvs, must set 0th row as header!!
-        print(peak_table.shape)
 
 
         # equivalent to all_coords in the original code
-        print(peak_table.columns)
         all_coords = peak_table[["chrom", "start", "end", "task"]].values  # need task to create statuses
 
         train_coords = all_coords [np.isin(all_coords[:, 0], train_chroms)]
