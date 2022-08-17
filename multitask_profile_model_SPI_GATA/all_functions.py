@@ -626,7 +626,8 @@ class DataLoader():
         else:
             print(self.tasks[0])
             print(self.premade_tsv_path)
-            peak_table = load_task_peak_table(self.premade_tsv_path, self.tasks[0], header=0)  # for tsvs, must set 0th row as header!!
+            peak_table = load_task_peak_table(self.premade_tsv_path, self.tasks[0], header=0) 
+            # i realize as of aug 2022 that header=0 is wrong, and actually should be header=None but ok...
 
 
         # equivalent to all_coords in the original code
@@ -745,10 +746,12 @@ def save_preds_by_subset(model, tf, assay, controls, save_path, peak_subset, chr
     save_preds(dataloader, model, f'{save_path}{peak_subset}_{ assay[:-4] }_loader.preds')
     
     
+    tasks_path = '/home/katie/bp_repo/research/data/' + NOT_ASSAY + '/'
+    
     premade_tsv_path = f'{tf}_{ NOT_ASSAY[:-4] }_unique_{SUBSET_ID}_{ assay[:-4] }'
     print(f'Tasks path: {tasks_path}\nTSV path: {premade_tsv_path}')
     
-    dataloader = DataLoader(tasks=[tf], assay=assay, controls=controls, fake_controls=controls,
+    dataloader = DataLoader(tasks=[tf], assay=NOT_ASSAY, controls=controls, fake_controls=controls,
                             tasks_path=tasks_path, subset=[chrom_subset], jitter=False, 
                             premade_tsv_path=f'{subsets_path_root}{premade_tsv_path}').make_loaders()[chrom_subset]
     save_preds(dataloader, model, f'{save_path}{peak_subset}_{ NOT_ASSAY[:-4] }_loader.preds')

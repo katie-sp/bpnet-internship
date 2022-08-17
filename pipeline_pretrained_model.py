@@ -152,14 +152,14 @@ if __name__ == "__main__":
                         '/home/katie/bp_repo/multitask_profile_model_SPI_GATA/data/genomes/hg38.fasta',
                         '/home/katie/bp_repo/research/data/hg38.chrom.sizes', task_index=1, controls=control_type, output_head=output_head)
     # TF-MoDISco
-    if num_tasks == 1:
-        run_tf_modisco(outdir + 'shap_scores',
-            outdir + 'tfmodisco_results',
-            outdir + 'seqlets', center_cut_size=400)
-    else:
-        run_tf_modisco(outdir + 'shap_scores_' + tasks[0],
-            outdir + 'tfmodisco_results_' + tasks[0],
-            outdir + 'seqlets_' + tasks[0], center_cut_size=400)
-        run_tf_modisco(model_path + 'shap_scores_' + tasks[1],
-            outdir + 'tfmodisco_results_' + tasks[1],
-            outdir + 'seqlets_' + tasks[1], center_cut_size=400)
+    # if num_tasks == 1:
+    #     run_tf_modisco(outdir + 'shap_scores',
+    #         outdir + 'tfmodisco_results',
+    #         outdir + 'seqlets', center_cut_size=400)
+    # else:
+    #     run_tf_modisco(outdir + 'shap_scores_' + tasks[0],
+    #         outdir + 'tfmodisco_results_' + tasks[0],
+    #         outdir + 'seqlets_' + tasks[0], center_cut_size=400)
+    #     run_tf_modisco(model_path + 'shap_scores_' + tasks[1],
+    #         outdir + 'tfmodisco_results_' + tasks[1],
+    #         outdir + 'seqlets_' + tasks[1], center_cut_size=400)
